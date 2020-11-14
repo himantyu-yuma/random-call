@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <video id="friend" autoplay muted="true"></video>
+
+    <button id="test-btn">コール</button>
+    <!-- Sky-way -->
+    <script src="https://cdn.webrtc.ecl.ntt.com/skyway-latest.js"></script>
+
+
+    <script>
+        (async function main() {
+            const friendVideo = document.getElementById('friend');
+            // メディア情報
+            const localStream = await navigator.mediaDevices.getUserMedia({ video: true });
+
+            // peerオブジェクト生成
+            const peer = new Peer('test1', {
+                key: "",
+                debug: 3,
+            });
+            // 通話開始
+            const startCall = async (peerId) => {
+                const call = peer.call(peerId, localStream);
+                // メディア情報を取得できたとき
+                call.on('stream', stream => {
+                    friendVideo.srcObject = stream;
+                    // // 一定時間で切る
+                    // setTimeout(() => {
+                    //     mediaConnection.close(true)
+                    // }, 10000);
+                });
+                // 通話が終了した時
+                call.once('close', () => {
+                    friendVideo.srcObject.getTracks().forEach(track => {
+                        track.stop();
+                    });
+                    friendVideo.srcObject = null;
+                });
+            }
+
+            // 通話がつながった時
+            peer.on('call', mediaConnection => {
+                mediaConnection.answer(localStream);
+                // メディア情報を取得できたとき
+                mediaConnection.on('stream', stream => {
+                    friendVideo.srcObject = stream;
+                    // 一定時間で切る
+                    setTimeout(() => {
+                        mediaConnection.close(true)
+                    }, 10000);
+                });
+                // 通話が終了した時
+                mediaConnection.once('close', () => {
+                    friendVideo.srcObject.getTracks().forEach(track => {
+                        track.stop();
+                    });
+                    friendVideo.srcObject = null;
+                });
+            });
+
+            document.getElementById('test-btn').addEventListener('click', () => {
+                startCall('test2');
+            })
+        })();
+    </script>
+</body>
+
+</html>
