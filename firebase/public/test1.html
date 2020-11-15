@@ -8,22 +8,25 @@
 </head>
 
 <body>
-    <video id="friend" autoplay muted="true"></video>
-
+    <video id="friend" width="480" height="270" autoplay muted="true" controls></video>
+    <audio src="audio/bell.mp3" id="bell"></audio>
     <button id="test-btn">コール</button>
     <!-- Sky-way -->
     <script src="https://cdn.webrtc.ecl.ntt.com/skyway-latest.js"></script>
 
-
+    <script src="js/key.js"></script>
     <script>
         (async function main() {
             const friendVideo = document.getElementById('friend');
             // メディア情報
-            const localStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const localStream = await navigator.mediaDevices.getUserMedia({
+                video:  { width: {ideal: 480 }, height: {ideal: 270 } },
+                audio: true
+            });
 
             // peerオブジェクト生成
             const peer = new Peer('test1', {
-                key: "",
+                key: window.__SKYWAY_KEY__,
                 debug: 3,
             });
             // 通話開始
@@ -54,7 +57,10 @@
                     friendVideo.srcObject = stream;
                     // 一定時間で切る
                     setTimeout(() => {
-                        mediaConnection.close(true)
+                        document.getElementById('bell').play();
+                        setTimeout(() => {
+                            mediaConnection.close(true);
+                        }, 10000);
                     }, 10000);
                 });
                 // 通話が終了した時

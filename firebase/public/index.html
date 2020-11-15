@@ -9,11 +9,28 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
         integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
     <style>
+        body {
+            background-image: url(img/background.JPG);
+            background-size: cover;
+        }
 
+        video {
+            border: 1px solid #000;
+        }
     </style>
 </head>
 
 <body>
+    <div class="container">
+        <div class="header text-center">
+            <img src="img/title.png" alt="">
+        </div>
+        <div class="text-center mt-5">
+            <video id="friend" width="480" height="270" autoplay muted="true" controls></video>
+        </div>
+    </div>
+    <audio src="audio/bell.mp3" id="bell"></audio>
+
     <!-- bootstrap -->
     <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
         integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
@@ -39,15 +56,17 @@
     <!-- Sky-way -->
     <script src="https://cdn.webrtc.ecl.ntt.com/skyway-latest.js"></script>
 
-
+    <script src="js/key.js"></script>
     <script>
         (async function main() {
 
             const friends = ['taro', 'hanako', 'takashi'];
             const friendVideo = document.getElementById('friend');
             // メディア情報
-            const localStream = await navigator.mediaDevices.getUserMedia({ video: true });
-            
+            const localStream = await navigator.mediaDevices.getUserMedia({
+                video: { width: {ideal: 480 }, height: {ideal: 270 } },
+                audio: true
+            });
             // ランダムなユーザー名を返す
             const getRandomUser = userArr => {
                 const target = userArr[Math.floor(Math.random() * userArr.length)];
@@ -55,12 +74,27 @@
             }
             // peerオブジェクト生成
             const peer = new Peer('username', {
-                key: "<YOUR-API-KEY>",
+                key: window.__SKYWAY_KEY__,
                 debug: 3,
             });
             // 通話開始
             const startCall = async (peerId) => {
                 const call = peer.call(peerId, localStream);
+                // メディア情報を取得できたとき
+                call.on('stream', stream => {
+                    friendVideo.srcObject = stream;
+                    // // 一定時間で切る
+                    // setTimeout(() => {
+                    //     mediaConnection.close(true)
+                    // }, 10000);
+                });
+                // 通話が終了した時
+                call.once('close', () => {
+                    friendVideo.srcObject.getTracks().forEach(track => {
+                        track.stop();
+                    });
+                    friendVideo.srcObject = null;
+                });
             }
 
             // 通話がつながった時
@@ -71,7 +105,10 @@
                     friendVideo.srcObject = stream;
                     // 一定時間で切る
                     setTimeout(() => {
-                        mediaConnection.close(true)
+                        document.getElementById('bell').play();
+                        setTimeout(() => {
+                            mediaConnection.close(true);
+                        }, 10000);
                     }, 10000);
                 });
                 // 通話が終了した時
@@ -83,8 +120,6 @@
                 });
             });
         })();
-
-
     </script>
 </body>
 
