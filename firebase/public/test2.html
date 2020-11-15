@@ -8,18 +8,24 @@
 </head>
 
 <body>
-    <video id="friend" width="480" height="270" autoplay muted="true" controls></video>
+    <!-- <video id="friend" width="480" height="270" autoplay muted="true" controls></video> -->
+    <div id="video-container"></div>
     <audio src="audio/bell.mp3" id="bell"></audio>
+    <audio src="audio/enter.mp3" id="enter"></audio>
+
+    <button id="test-btn">コール</button>
     <!-- Sky-way -->
     <script src="https://cdn.webrtc.ecl.ntt.com/skyway-latest.js"></script>
 
     <script src="js/key.js"></script>
     <script>
         (async function main() {
-            const friendVideo = document.getElementById('friend');
+            // const friendVideo = document.getElementById('friend');
+            const videoContainer = document.getElementById('video-container');
+
             // メディア情報
             const localStream = await navigator.mediaDevices.getUserMedia({
-                video:  { width: {ideal: 480 }, height: {ideal: 270 } },
+                video: { width: { ideal: 480 }, height: { ideal: 270 } },
                 audio: true
             });
 
@@ -28,48 +34,71 @@
                 key: window.__SKYWAY_KEY__,
                 debug: 3,
             });
-            // 通話開始
-            const startCall = async (peerId) => {
-                const call = peer.call(peerId, localStream);
-                // メディア情報を取得できたとき
-                call.on('stream', stream => {
-                    friendVideo.srcObject = stream;
-                    // // 一定時間で切る
-                    // setTimeout(() => {
-                    //     mediaConnection.close(true)
-                    // }, 10000);
-                });
-                // 通話が終了した時
-                call.once('close', () => {
-                    friendVideo.srcObject.getTracks().forEach(track => {
-                        track.stop();
-                    });
-                    friendVideo.srcObject = null;
-                });
-            }
 
-            // 通話がつながった時
-            peer.on('call', mediaConnection => {
-                mediaConnection.answer(localStream);
-                // メディア情報を取得できたとき
-                mediaConnection.on('stream', stream => {
-                    friendVideo.srcObject = stream;
+            const roomId = 'testroom';
+
+            // 通話開始
+            const startCall = () => {
+                const room = peer.joinRoom(roomId, {
+                    mode: 'sfu',
+                    stream: localStream
+                });
+
+                // 自分が入室したとき
+                room.on('open', () => {
+                    console.log('入室');
+                });
+
+                // 誰かが入室してきたとき
+                room.on('peerJoin', peerId => {
+                    console.log(peerId);
+                    document.getElementById('enter').play();
+                });
+
+                // メディアを取得した時
+                room.on('stream', async stream => {
+                    const remoteVideo = document.createElement('video');
+                    remoteVideo.srcObject = stream;
+                    remoteVideo.playsInline = true;
+                    remoteVideo.setAttribute('data-peer-id', stream.peerId);
+                    videoContainer.append(remoteVideo);
+
+                    await remoteVideo.play().catch(console.error);
                     // 一定時間で切る
                     setTimeout(() => {
                         document.getElementById('bell').play();
                         setTimeout(() => {
-                            mediaConnection.close(true);
+                            room.close();
                         }, 10000);
+                        setTimeout(() => {
+                            startCall();
+                        }, 20000);
                     }, 10000);
                 });
-                // 通話が終了した時
-                mediaConnection.once('close', () => {
-                    friendVideo.srcObject.getTracks().forEach(track => {
+
+                room.on('peerLeave', peerId => {
+                    const remoteVideo = videoContainer.querySelector(`[data-peer-id="${peerId}"]`);
+                    remoteVideo.srcObject.getTracks().forEach(track => {
                         track.stop();
                     });
-                    friendVideo.srcObject = null;
+                    remoteVideo.srcObject = null;
+                    remoteVideo.remove();
                 });
-            });
+
+                room.once('close', () => {
+                    const remoteVideos = videoContainer.querySelectorAll('[data-peer-id]');
+                    Array.from(remoteVideos)
+                        .forEach(remoteVideo => {
+                            remoteVideo.srcObject.getTracks().forEach(track => track.stop());
+                            remoteVideo.srcObject = null;
+                            remoteVideo.remove();
+                        });
+                });
+            }
+
+            setTimeout(() => {
+                startCall();
+            }, 10000);
         })();
     </script>
 </body>

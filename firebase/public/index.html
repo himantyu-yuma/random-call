@@ -17,19 +17,59 @@
         video {
             border: 1px solid #000;
         }
+
+        .room-list {
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 10px;
+            padding: 1rem;
+        }
     </style>
 </head>
 
 <body>
+    <script src="https://cdn.webrtc.ecl.ntt.com/skyway-latest.js"></script>
+
     <div class="container">
         <div class="header text-center">
             <img src="img/title.png" alt="">
         </div>
-        <div class="text-center mt-5">
-            <video id="friend" width="480" height="270" autoplay muted="true" controls></video>
+        <div class="text-center mt-5" id="video-container">
+            <!-- <video id="friend" width="480" height="270" autoplay muted="true" controls></video> -->
+        </div>
+        <div class="room-list">
+            <h3 class="text-center">新しくルームを作成</h3>
+            <div class="input-group new-room-container form-inline">
+                <label class="mr-1" for="new-room-name">ルーム名</label>
+                <input type="text" name="new-room-name" class="form-control" id="new-room-name"
+                    placeholder="例）✟戦士の休息所✟">
+                <button class="btn btn-primary" id="make-room">新規作成</button>
+            </div>
+            <h3 class="text-center mt-3">既存のルームを登録</h3>
+            <div class="input-group add-room-container form-inline">
+                <label class="mr-1" for="add-room-name">ルーム名</label>
+                <input type="text" name="add-room-name" class="form-control" id="add-room-name" placeholder="ルーム名を入力">
+                <label class="mr-1" for="add-room-name">ルームID</label>
+                <input type="text" name="add-room-id" class="form-control" id="add-room-id" placeholder="ルームIDを入力">
+                <button class="btn btn-success" id="add-room">追加</button>
+            </div>
+            <table class="mx-auto mt-3" id="room-table" width="80%">
+                <thead>
+                    <th width="40%">ルーム名</th>
+                    <th width="40%">ルームID</th>
+                    <td width="20"></td>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>✟戦士の休息所✟</td>
+                        <td>NJKNJ1234HIOKJ</td>
+                        <td><button class="btn btn-danger">削除</button></td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </div>
     <audio src="audio/bell.mp3" id="bell"></audio>
+    <audio src="audio/enter.mp3" id="enter"></audio>
 
     <!-- bootstrap -->
     <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
@@ -42,83 +82,190 @@
         integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"
         crossorigin="anonymous"></script>
     <!-- update the version number as needed -->
-    <script defer src="/__/firebase/8.0.2/firebase-app.js"></script>
+    <script src="/__/firebase/8.0.2/firebase-app.js"></script>
     <!-- include only the Firebase features as you need -->
-    <script defer src="/__/firebase/8.0.2/firebase-auth.js"></script>
-    <script defer src="/__/firebase/8.0.2/firebase-database.js"></script>
-    <script defer src="/__/firebase/8.0.2/firebase-messaging.js"></script>
-    <script defer src="/__/firebase/8.0.2/firebase-storage.js"></script>
-    <script defer src="/__/firebase/8.0.2/firebase-analytics.js"></script>
-    <script defer src="/__/firebase/8.0.2/firebase-remote-config.js"></script>
-    <script defer src="/__/firebase/8.0.2/firebase-performance.js"></script>
+    <script src="/__/firebase/8.0.2/firebase-auth.js"></script>
+    <script src="/__/firebase/8.0.2/firebase-database.js"></script>
+    <script src="/__/firebase/8.0.2/firebase-messaging.js"></script>
+    <script src="/__/firebase/8.0.2/firebase-storage.js"></script>
+    <script src="/__/firebase/8.0.2/firebase-analytics.js"></script>
+    <script src="/__/firebase/8.0.2/firebase-remote-config.js"></script>
+    <script src="/__/firebase/8.0.2/firebase-performance.js"></script>
     <!-- initialize the SDK after all desired features are loaded -->
-    <script defer src="/__/firebase/init.js"></script>
+    <script src="/__/firebase/init.js"></script>
     <!-- Sky-way -->
-    <script src="https://cdn.webrtc.ecl.ntt.com/skyway-latest.js"></script>
 
     <script src="js/key.js"></script>
     <script>
+        // uuid作成機
+        const generateUuid = () => {
+            // https://github.com/GoogleChrome/chrome-platform-analytics/blob/master/src/internal/identifier.js
+            // const FORMAT: string = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx";
+            let chars = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".split("");
+            for (let i = 0, len = chars.length; i < len; i++) {
+                switch (chars[i]) {
+                    case "x":
+                        chars[i] = Math.floor(Math.random() * 16).toString(16);
+                        break;
+                    case "y":
+                        chars[i] = (Math.floor(Math.random() * 4) + 8).toString(16);
+                        break;
+                }
+            }
+            return chars.join("");
+        }
         (async function main() {
+            // 休み時間が何分おきに来るのか
+            const interval = 1;
+            // 休み時間の長さ
+            const breakTime = 2;
+            // const friends = ['taro', 'hanako', 'takashi'];
+            // 参加してるルーム一覧
+            let rooms = [];
 
-            const friends = ['taro', 'hanako', 'takashi'];
-            const friendVideo = document.getElementById('friend');
+            // const friendVideo = document.getElementById('friend');
+            const videoContainer = document.getElementById('video-container');
             // メディア情報
             const localStream = await navigator.mediaDevices.getUserMedia({
-                video: { width: {ideal: 480 }, height: {ideal: 270 } },
+                video: { width: { ideal: 480 }, height: { ideal: 270 } },
                 audio: true
             });
             // ランダムなユーザー名を返す
-            const getRandomUser = userArr => {
-                const target = userArr[Math.floor(Math.random() * userArr.length)];
+            // const getRandomUser = userArr => {
+            const getRandomRoom = roomArr => {
+                const target = roomArr[Math.floor(Math.random() * roomArr.length)];
                 return target;
             }
             // peerオブジェクト生成
-            const peer = new Peer('username', {
+            const peer = new Peer({
                 key: window.__SKYWAY_KEY__,
                 debug: 3,
             });
-            // 通話開始
-            const startCall = async (peerId) => {
-                const call = peer.call(peerId, localStream);
-                // メディア情報を取得できたとき
-                call.on('stream', stream => {
-                    friendVideo.srcObject = stream;
-                    // // 一定時間で切る
-                    // setTimeout(() => {
-                    //     mediaConnection.close(true)
-                    // }, 10000);
-                });
-                // 通話が終了した時
-                call.once('close', () => {
-                    friendVideo.srcObject.getTracks().forEach(track => {
-                        track.stop();
-                    });
-                    friendVideo.srcObject = null;
-                });
-            }
 
-            // 通話がつながった時
-            peer.on('call', mediaConnection => {
-                mediaConnection.answer(localStream);
-                // メディア情報を取得できたとき
-                mediaConnection.on('stream', stream => {
-                    friendVideo.srcObject = stream;
+            // ルーム通話に切り替えていく
+            const startCall = roomId => {
+                const room = peer.joinRoom(roomId, {
+                    mode: 'sfu',
+                    stream: localStream
+                });
+
+                // 自分が入室したとき
+                room.on('open', () => {
+                    console.log('入室');
+                    document.getElementById('bell').play();
+
+                });
+
+                // 誰かが入室してきたとき
+                room.on('peerJoin', peerId => {
+                    console.log(peerId);
+                    document.getElementById('enter').play();
+                });
+
+                // メディアを取得した時
+                room.on('stream', async stream => {
+                    const remoteVideo = document.createElement('video');
+                    remoteVideo.srcObject = stream;
+                    remoteVideo.playsInline = true;
+                    remoteVideo.setAttribute('data-peer-id', stream.peerId);
+                    videoContainer.append(remoteVideo);
+
+                    await remoteVideo.play().catch(console.error);
                     // 一定時間で切る
                     setTimeout(() => {
                         document.getElementById('bell').play();
                         setTimeout(() => {
-                            mediaConnection.close(true);
+                            room.close();
+                            setTimeout(() => {
+                                startCall(getRandomRoom(rooms));
+                            }, interval * 60 * 1000);
                         }, 10000);
-                    }, 10000);
+                    }, (breakTime - 1) * 60 * 1000 - 1000);
                 });
-                // 通話が終了した時
-                mediaConnection.once('close', () => {
-                    friendVideo.srcObject.getTracks().forEach(track => {
+
+                room.on('peerLeave', peerId => {
+                    const remoteVideo = videoContainer.querySelector(`[data-peer-id="${peerId}"]`);
+                    remoteVideo.srcObject.getTracks().forEach(track => {
                         track.stop();
                     });
-                    friendVideo.srcObject = null;
+                    remoteVideo.srcObject = null;
+                    remoteVideo.remove();
                 });
+
+                room.once('close', () => {
+                    const remoteVideos = videoContainer.querySelectorAll('[data-peer-id]');
+                    Array.from(remoteVideos)
+                        .forEach(remoteVideo => {
+                            remoteVideo.srcObject.getTracks().forEach(track => track.stop());
+                            remoteVideo.srcObject = null;
+                            remoteVideo.remove();
+                        });
+                });
+            }
+
+            // 部屋を新しく作る
+            const roomTable = document.getElementById('room-table')
+            const makeRoom = () => {
+                const roomName = document.getElementById('new-room-name').value;
+
+                const newRow = roomTable.insertRow();
+                const newNameCell = newRow.insertCell();
+                const newRoomName = document.createTextNode(roomName);
+                newNameCell.appendChild(newRoomName);
+
+                const newIdCell = newRow.insertCell();
+                // uuidを作成してRoomIdとする
+                const roomId = generateUuid();
+                const newRoomId = document.createTextNode(roomId);
+                newIdCell.appendChild(newRoomId);
+
+                const newBtn = newRow.insertCell();
+                const newBtnInner = document.createElement('button');
+                newBtnInner.classList.add('btn');
+                newBtnInner.textContent = '削除'
+                newBtn.appendChild(newBtnInner);
+
+                // ルーム配列に追加などする
+                rooms.push(roomId);
+            }
+            document.getElementById('make-room').addEventListener('click', () => {
+                makeRoom();
             });
+            // IDも指定して追加をする
+            const addRoom = (name, id) => {
+
+
+                const newRow = roomTable.insertRow();
+                const newNameCell = newRow.insertCell();
+                const newRoomName = document.createTextNode(name);
+                newNameCell.appendChild(newRoomName);
+
+                const newIdCell = newRow.insertCell();
+                const newRoomId = document.createTextNode(id);
+                newIdCell.appendChild(newRoomId);
+
+                // ルーム配列に追加などする
+                rooms.push(id);
+            }
+            document.getElementById('add-room').addEventListener('click', () => {
+                const roomName = document.getElementById('add-room-name').value;
+                const roomId = document.getElementById('add-room-id').value;
+                addRoom(roomName, roomId);
+            });
+
+            // ルームIDを削除
+            const removeRoom = roomId => {
+                document.getElementById(roomId).remove();
+                const index = rooms.indexOf(roomId);
+                if(index != -1){
+                    rooms.splice(index, 1);
+                }
+            }
+            // 最初の1回
+            setTimeout(() => {
+                startCall(getRandomRoom(rooms));
+                // startCall('testroom');
+            }, interval * 60 * 1000);
         })();
     </script>
 </body>
